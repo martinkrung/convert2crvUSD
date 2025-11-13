@@ -122,6 +122,25 @@ This will:
 
 **Note**: Vyper contracts often require manual verification on Arbiscan. See `VERIFICATION_GUIDE.md` for instructions.
 
+### 3. Interact with Deployed Contract
+
+```bash
+# Interactive mode with Titanoboa
+python scripts/boa_interact.py
+
+# Or run examples
+python scripts/boa_examples.py
+```
+
+Features:
+- ✅ Full contract interaction via Titanoboa
+- ✅ No ABIs needed - uses Vyper source directly
+- ✅ Interactive CLI menu
+- ✅ Programmatic usage support
+- ✅ Works with deployed contracts on-chain
+
+See [BOA_GUIDE.md](BOA_GUIDE.md) for complete documentation.
+
 ## 🏗️ Architecture
 
 ### Smart Contract: Convert2CrvUSD.vy

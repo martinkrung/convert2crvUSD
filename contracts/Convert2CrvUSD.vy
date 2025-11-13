@@ -6,11 +6,13 @@
 @dev Uses CoW Protocol's ERC-1271 order validation for programmatic trading
 """
 
-from ethereum.ercs import IERC20
-
-implements: IERC20
-
 # Interfaces
+interface IERC20:
+    def balanceOf(owner: address) -> uint256: view
+    def transfer(to: address, amount: uint256) -> bool: nonpayable
+    def transferFrom(sender: address, recipient: address, amount: uint256) -> bool: nonpayable
+    def approve(spender: address, amount: uint256) -> bool: nonpayable
+
 interface IERC1271:
     def isValidSignature(message_hash: bytes32, signature: Bytes[1024]) -> bytes4: view
 
@@ -59,7 +61,6 @@ event OwnershipTransferred:
 
 # Constants
 ERC1271_MAGIC_VALUE: constant(bytes4) = 0x1626ba7e
-MAX_UINT256: constant(uint256) = max_value(uint256)
 BPS_DENOMINATOR: constant(uint256) = 10000
 
 # Fee configuration (in basis points)
@@ -147,8 +148,8 @@ def __init__(
     self.crv_usd_token = _crv_usd
 
     # Get vault relayer and domain separator from settlement contract
-    self.cow_vault_relayer = IGPv2Settlement(_cow_settlement).vaultRelayer()
-    self.cow_domain_separator = IGPv2Settlement(_cow_settlement).domainSeparator()
+    self.cow_vault_relayer = staticcall IGPv2Settlement(_cow_settlement).vaultRelayer()
+    self.cow_domain_separator = staticcall IGPv2Settlement(_cow_settlement).domainSeparator()
 
 @external
 @payable
@@ -282,7 +283,7 @@ def create_order(
     assert self.token_whitelist_status[sell_token], "Token not whitelisted"
     assert sell_amount > 0, "Amount must be positive"
     assert min_buy_amount > 0, "Min buy amount must be positive"
-    assert valid_to > block.timestamp, "Already expired"
+    assert valid_to > convert(block.timestamp, uint32), "Already expired"
 
     # Check user has sufficient balance
     assert self.user_token_balance[user][sell_token] >= sell_amount, "Insufficient balance"
@@ -317,11 +318,12 @@ def create_order(
     order_hash: bytes32 = self._hash_order(order)
 
     # Compute order UID (hash + owner + validTo)
+    # CoW Protocol order UID format: keccak256(orderHash || owner || validTo)
     order_uid: bytes32 = keccak256(
         concat(
-            convert(order_hash, bytes32),
-            convert(self, bytes32),
-            convert(valid_to, bytes32)
+            order_hash,
+            convert(self, bytes20),
+            convert(valid_to, bytes4)
         )
     )
 
@@ -354,19 +356,19 @@ def _hash_order(order: OrderData) -> bytes32:
     """
     return keccak256(
         concat(
-            convert(GPV2_ORDER_TYPE_HASH, bytes32),
+            GPV2_ORDER_TYPE_HASH,
             convert(order.sell_token, bytes32),
             convert(order.buy_token, bytes32),
             convert(order.receiver, bytes32),
             convert(order.sell_amount, bytes32),
             convert(order.buy_amount, bytes32),
             convert(order.valid_to, bytes32),
-            convert(order.app_data, bytes32),
+            order.app_data,
             convert(order.fee_amount, bytes32),
-            convert(order.kind, bytes32),
+            order.kind,
             convert(order.partially_fillable, bytes32),
-            convert(order.sell_token_balance, bytes32),
-            convert(order.buy_token_balance, bytes32)
+            order.sell_token_balance,
+            order.buy_token_balance
         )
     )
 
@@ -406,7 +408,7 @@ def cancel_expired_order(order_uid: bytes32):
     """
     order: ActiveOrder = self.active_orders[order_uid]
     assert order.is_active, "Order not active"
-    assert block.timestamp > order.expiry, "Order not expired"
+    assert convert(block.timestamp, uint32) > order.expiry, "Order not expired"
 
     # Cancel pre-signature
     extcall IGPv2Settlement(self.cow_settlement).setPreSignature(order_uid, False)
@@ -461,9 +463,9 @@ def refund_non_whitelisted_token(user: address, token: address):
     assert balance > 0, "No balance to refund"
 
     # Calculate fees
-    total_fee: uint256 = balance * REFUND_FEE_BPS / BPS_DENOMINATOR
-    fee_to_collector: uint256 = balance * COLLECTOR_FEE_BPS / BPS_DENOMINATOR
-    fee_to_initiator: uint256 = balance * INITIATOR_FEE_BPS / BPS_DENOMINATOR
+    total_fee: uint256 = balance * REFUND_FEE_BPS // BPS_DENOMINATOR
+    fee_to_collector: uint256 = balance * COLLECTOR_FEE_BPS // BPS_DENOMINATOR
+    fee_to_initiator: uint256 = balance * INITIATOR_FEE_BPS // BPS_DENOMINATOR
     amount_to_user: uint256 = balance - total_fee
 
     # Clear user balance
