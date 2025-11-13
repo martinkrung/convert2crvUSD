@@ -1,0 +1,36 @@
+[project]
+name = "convert2crvUSD"
+version = "0.1.0"
+description = "Convert any token to crvUSD via CoW Swap on Arbitrum"
+requires-python = ">=3.11"
+dependencies = [
+    "titanoboa>=0.2.0",
+    "eth-abi>=5.0.0",
+    "eth-account>=0.11.0",
+    "eth-utils>=4.0.0",
+    "web3>=6.15.0",
+    "python-dotenv>=1.0.0",
+    "requests>=2.31.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "hypothesis>=6.98.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501"]

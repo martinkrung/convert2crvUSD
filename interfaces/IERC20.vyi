@@ -1,0 +1,66 @@
+# @version 0.4.3
+"""
+@title ERC20 Interface
+@notice Standard ERC20 token interface
+"""
+
+@external
+@view
+def balanceOf(owner: address) -> uint256:
+    """
+    @notice Get the token balance of an account
+    @param owner The address to query
+    @return The token balance
+    """
+    ...
+
+@external
+@view
+def totalSupply() -> uint256:
+    """
+    @notice Get the total token supply
+    @return The total supply
+    """
+    ...
+
+@external
+@view
+def allowance(owner: address, spender: address) -> uint256:
+    """
+    @notice Get the allowance granted to a spender
+    @param owner The token owner
+    @param spender The approved spender
+    @return The allowance amount
+    """
+    ...
+
+@external
+def transfer(to: address, amount: uint256) -> bool:
+    """
+    @notice Transfer tokens to an address
+    @param to The recipient address
+    @param amount The amount to transfer
+    @return Success boolean
+    """
+    ...
+
+@external
+def transferFrom(sender: address, recipient: address, amount: uint256) -> bool:
+    """
+    @notice Transfer tokens from one address to another
+    @param sender The sender address
+    @param recipient The recipient address
+    @param amount The amount to transfer
+    @return Success boolean
+    """
+    ...
+
+@external
+def approve(spender: address, amount: uint256) -> bool:
+    """
+    @notice Approve a spender to transfer tokens
+    @param spender The approved spender
+    @param amount The approval amount
+    @return Success boolean
+    """
+    ...

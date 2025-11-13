@@ -1,0 +1,33 @@
+# @version 0.4.3
+"""
+@title CoW Protocol GPv2 Settlement Interface
+@notice Interface for CoW Protocol settlement contract
+@dev Arbitrum address: 0x9008D19f58AAbD9eD0D60971565AA8510560ab41
+"""
+
+@external
+@view
+def domainSeparator() -> bytes32:
+    """
+    @notice Get the EIP-712 domain separator
+    @return The domain separator hash
+    """
+    ...
+
+@external
+@view
+def vaultRelayer() -> address:
+    """
+    @notice Get the vault relayer address that can transfer tokens
+    @return The vault relayer address
+    """
+    ...
+
+@external
+def setPreSignature(order_uid: bytes32, signed: bool):
+    """
+    @notice Set a pre-signature for an order
+    @param order_uid The unique order identifier
+    @param signed Whether to enable or disable the signature
+    """
+    ...

@@ -1,0 +1,17 @@
+# @version 0.4.3
+"""
+@title ERC-1271 Interface
+@notice Standard signature validation interface for contracts
+@dev Used by CoW Protocol to validate smart contract orders
+"""
+
+@external
+@view
+def isValidSignature(message_hash: bytes32, signature: Bytes[1024]) -> bytes4:
+    """
+    @notice Verify if a signature is valid for a given message hash
+    @param message_hash The hash of the message that was signed
+    @param signature The signature bytes
+    @return The magic value 0x1626ba7e if valid, otherwise reverts
+    """
+    ...
