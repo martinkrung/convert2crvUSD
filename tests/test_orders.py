@@ -149,6 +149,10 @@ def test_settle_order(converter, operator, weth, crv_usd, funded_alice):
     valid_to = boa.env.vm.state.timestamp + 3600
     app_data = b"\x00" * 32
 
+    # Check balance before order
+    initial_balance = converter.get_user_balance(funded_alice, weth.address)
+    assert initial_balance == deposit_amount
+
     with boa.env.prank(operator):
         order_uid = converter.create_order(
             funded_alice,
@@ -159,17 +163,18 @@ def test_settle_order(converter, operator, weth, crv_usd, funded_alice):
             app_data
         )
 
-        # Simulate settlement - in reality CoW solver would fill this
-        # For testing, we just mark it settled
-        initial_balance = converter.get_user_balance(funded_alice, weth.address)
+        # Balance should be deducted immediately when order is created
+        balance_after_create = converter.get_user_balance(funded_alice, weth.address)
+        assert balance_after_create == initial_balance - sell_amount
 
+        # Simulate settlement - in reality CoW solver would fill this
         # Settle with amount of crvUSD received (simulated)
         crv_usd_amount = 2000 * 10**18
         converter.settle_order(order_uid, crv_usd_amount)
 
-        # Check balance was deducted
+        # Balance should remain the same (already deducted)
         final_balance = converter.get_user_balance(funded_alice, weth.address)
-        assert final_balance == initial_balance - sell_amount
+        assert final_balance == balance_after_create
 
         # Check order is no longer active
         order = converter.active_orders(order_uid)
@@ -198,6 +203,10 @@ def test_cancel_order(converter, operator, weth, funded_alice):
             app_data
         )
 
+        # Balance deducted when order created
+        balance_after_create = converter.get_user_balance(funded_alice, weth.address)
+        assert balance_after_create == deposit_amount - sell_amount
+
         # Cancel order
         converter.cancel_order(order_uid)
 
@@ -205,7 +214,7 @@ def test_cancel_order(converter, operator, weth, funded_alice):
         order = converter.active_orders(order_uid)
         assert order[6] == False
 
-        # User should still have their balance
+        # Balance should be refunded back to user
         balance = converter.get_user_balance(funded_alice, weth.address)
         assert balance == deposit_amount
 
@@ -232,6 +241,10 @@ def test_cancel_expired_order(converter, operator, weth, funded_alice):
             app_data
         )
 
+    # Balance deducted when order created
+    balance_after_create = converter.get_user_balance(funded_alice, weth.address)
+    assert balance_after_create == deposit_amount - sell_amount
+
     # Advance time past expiry
     boa.env.time_travel(seconds=200)
 
@@ -242,6 +255,10 @@ def test_cancel_expired_order(converter, operator, weth, funded_alice):
     # Check order is inactive
     order = converter.active_orders(order_uid)
     assert order[6] == False
+
+    # Balance should be refunded back to user
+    final_balance = converter.get_user_balance(funded_alice, weth.address)
+    assert final_balance == deposit_amount
 
 
 def test_cancel_non_expired_order_fails(converter, operator, weth, funded_alice, alice):

@@ -293,6 +293,11 @@ def create_order(
     if existing_order_uid != empty(bytes32):
         assert not self.active_orders[existing_order_uid].is_active, "User has active order"
 
+    # IMPORTANT: Deduct balance NOW (before approval)
+    # CoW settlement will pull tokens without notifying us
+    # So we must deduct before the order can be filled
+    self.user_token_balance[user][sell_token] -= sell_amount
+
     # Approve vault relayer to spend tokens
     success: bool = extcall IERC20(sell_token).approve(self.cow_vault_relayer, sell_amount)
     assert success, "Approval failed"
@@ -382,16 +387,15 @@ def settle_order(order_uid: bytes32, crv_usd_received: uint256):
     @param crv_usd_received Amount of crvUSD the user received
     @dev Called by operator after observing settlement onchain
          User receives crvUSD directly from CoW settlement
+         Balance was already deducted when order was created
     """
     assert msg.sender == self.operator, "Only operator"
 
     order: ActiveOrder = self.active_orders[order_uid]
     assert order.is_active, "Order not active"
 
-    # Deduct sold amount from user balance
-    self.user_token_balance[order.user][order.sell_token] -= order.sell_amount
-
-    # Mark order as inactive
+    # Balance was already deducted in create_order
+    # Just mark order as inactive
     self.active_orders[order_uid].is_active = False
     self.user_active_order[order.user] = empty(bytes32)
 
@@ -405,6 +409,7 @@ def cancel_expired_order(order_uid: bytes32):
     @notice Cancel an expired order and refund tokens to user
     @param order_uid The order identifier
     @dev Anyone can call this after order expiry
+         Returns tokens to user's internal balance since order was never filled
     """
     order: ActiveOrder = self.active_orders[order_uid]
     assert order.is_active, "Order not active"
@@ -413,7 +418,11 @@ def cancel_expired_order(order_uid: bytes32):
     # Cancel pre-signature
     extcall IGPv2Settlement(self.cow_settlement).setPreSignature(order_uid, False)
 
-    # Mark order as inactive (user keeps their balance)
+    # IMPORTANT: Refund balance back to user
+    # Balance was deducted when order was created, but order never filled
+    self.user_token_balance[order.user][order.sell_token] += order.sell_amount
+
+    # Mark order as inactive
     self.active_orders[order_uid].is_active = False
     self.user_active_order[order.user] = empty(bytes32)
 
@@ -428,6 +437,7 @@ def cancel_order(order_uid: bytes32):
     @notice Cancel an active order before expiry
     @param order_uid The order identifier
     @dev Only callable by operator
+         Returns tokens to user's internal balance since order was never filled
     """
     assert msg.sender == self.operator, "Only operator"
 
@@ -436,6 +446,10 @@ def cancel_order(order_uid: bytes32):
 
     # Cancel pre-signature
     extcall IGPv2Settlement(self.cow_settlement).setPreSignature(order_uid, False)
+
+    # IMPORTANT: Refund balance back to user
+    # Balance was deducted when order was created, but order never filled
+    self.user_token_balance[order.user][order.sell_token] += order.sell_amount
 
     # Mark order as inactive
     self.active_orders[order_uid].is_active = False
