@@ -166,7 +166,7 @@ def settlement(owner, vault_relayer):
 
 @pytest.fixture(scope="function")
 def converter(owner, operator, fee_collector, settlement, crv_usd, weth, usdc, crv):
-    """Deploy Convert2CrvUSD contract with whitelisted tokens"""
+    """Deploy Convert2CrvUSD contract with whitelisted tokens (OLD - for backward compatibility)"""
     with boa.env.prank(owner):
         contract = boa.load(
             "contracts/Convert2CrvUSD.vy",
@@ -183,6 +183,46 @@ def converter(owner, operator, fee_collector, settlement, crv_usd, weth, usdc, c
         contract.add_whitelisted_token(crv.address)
 
         return contract
+
+
+@pytest.fixture(scope="function")
+def personal_converter_blueprint(owner):
+    """Deploy PersonalConverter blueprint"""
+    with boa.env.prank(owner):
+        # Load contract bytecode as blueprint using vyper's create_blueprint
+        blueprint = boa.load_partial("contracts/PersonalConverter.vy").deploy_as_blueprint()
+        return blueprint
+
+
+@pytest.fixture(scope="function")
+def factory(owner, operator, fee_collector, settlement, crv_usd, personal_converter_blueprint, weth, usdc, crv):
+    """Deploy ConverterFactory with whitelisted tokens"""
+    with boa.env.prank(owner):
+        contract = boa.load(
+            "contracts/ConverterFactory.vy",
+            owner,                              # admin
+            operator,
+            fee_collector,
+            settlement.address,
+            crv_usd.address,
+            personal_converter_blueprint,
+            [weth.address, usdc.address, crv.address]  # initial whitelist
+        )
+        return contract
+
+
+@pytest.fixture(scope="function")
+def alice_converter(factory, alice):
+    """Deploy personal converter for Alice"""
+    converter_addr = factory.deploy_personal_converter(alice)
+    return boa.load_partial("contracts/PersonalConverter.vy").at(converter_addr)
+
+
+@pytest.fixture(scope="function")
+def bob_converter(factory, bob):
+    """Deploy personal converter for Bob"""
+    converter_addr = factory.deploy_personal_converter(bob)
+    return boa.load_partial("contracts/PersonalConverter.vy").at(converter_addr)
 
 
 @pytest.fixture(scope="function")

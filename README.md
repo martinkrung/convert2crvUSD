@@ -4,23 +4,53 @@ A Vyper smart contract system on Arbitrum that accepts various tokens and automa
 
 ## 🎯 Overview
 
-This project implements a novel pattern for token conversion:
-1. Users deposit whitelisted tokens directly to the contract
-2. The contract tracks internal balances per user
-3. An operator creates CoW Protocol orders to sell tokens for crvUSD
-4. **Users receive crvUSD directly** from CoW settlement (no withdrawal needed)
-5. Non-whitelisted tokens can be refunded with fees
+This project implements a **factory pattern** that achieves the original design goal:
+
+**Users can send tokens directly to a contract without `approve()`!**
+
+### How It Works
+
+1. **Factory deploys personal converter** for each user (cheap via blueprint pattern)
+2. **User sends tokens directly** to their personal converter (no approve needed!)
+3. **Operator creates CoW orders** on behalf of the user
+4. **User receives crvUSD directly** from CoW settlement
+
+See [FACTORY_PATTERN.md](./FACTORY_PATTERN.md) for detailed architecture.
 
 ## ✨ Key Features
 
-- **Direct Settlement**: Users receive crvUSD directly from CoW Protocol settlement
+- **No Approve Required**: Users just send tokens directly (1 transaction vs 2!)
+- **Factory Pattern**: Each user gets their own personal converter contract
+- **Blueprint Deployment**: Cheap per-user deployment (~60k gas)
+- **Direct Settlement**: Users receive crvUSD directly from CoW Protocol
 - **Token Whitelist**: WETH, USDC, and CRV accepted by default
 - **CoW Protocol Integration**: Uses ERC-1271 for programmatic order validation
 - **Refund Mechanism**: Non-whitelisted tokens refundable with 5% fee
 - **Order Timeout Protection**: Expired orders can be cancelled
-- **Fee Distribution**: 4% to fee collector, 1% to refund initiator
+- **Isolated Balances**: No multi-user accounting complexity
 - **Comprehensive Tests**: Full test coverage with Titanoboa
 - **Arbitrum Optimized**: Built specifically for Arbitrum network
+
+## 📐 Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                     ConverterFactory                     │
+│  - Deploys personal converters for users                │
+│  - Manages global config (operator, whitelist)          │
+└────────────────┬────────────────────────────────────────┘
+                 │
+                 │ deploys via blueprint
+                 │
+                 v
+┌────────────────────────────────────────────────────────┐
+│              PersonalConverter (per user)              │
+│  - Fixed owner (the user)                              │
+│  - Accepts direct token transfers                      │
+│  - Operator creates CoW orders                         │
+│  - User receives crvUSD directly                       │
+└────────────────────────────────────────────────────────┘
+```
 
 ## 📋 Prerequisites
 
@@ -77,8 +107,11 @@ ARBISCAN_API_KEY=your_arbiscan_key
 # Run all tests
 pytest tests/ -v
 
-# Run specific test file
-pytest tests/test_deposit.py -v
+# Run factory pattern tests
+pytest tests/test_factory.py -v
+
+# Run legacy pattern tests
+pytest tests/test_deposit.py tests/test_orders.py -v
 
 # Run with coverage
 pytest tests/ --cov=contracts --cov-report=html
@@ -86,28 +119,46 @@ pytest tests/ --cov=contracts --cov-report=html
 
 ### Test Coverage
 
-- ✅ Deposit functionality
-- ✅ Token whitelist management
+- ✅ Factory deployment and personal converter creation
+- ✅ Direct token transfers (no approve!)
 - ✅ Order creation and settlement
 - ✅ Order cancellation and timeouts
 - ✅ Refund mechanism with fees
+- ✅ Multi-user independence
 - ✅ Access control
 - ✅ Edge cases and security
 
 ## 📦 Deployment
 
-### 1. Deploy Contract
+### Option 1: Factory Pattern (Recommended)
+
+```bash
+python scripts/deploy_factory.py
+```
+
+This will:
+1. Deploy PersonalConverter blueprint
+2. Deploy ConverterFactory
+3. Initialize with whitelisted tokens (WETH, USDC, CRV)
+4. Save deployment info to `deployment_factory.json`
+
+**Advantages**:
+- Users can send tokens directly (no approve!)
+- Each user gets their own contract
+- Simple accounting, no multi-user complexity
+
+### Option 2: Legacy Pattern
 
 ```bash
 python scripts/deploy.py
 ```
 
 This will:
-- Validate environment configuration
-- Connect to Arbitrum via Alchemy
-- Deploy the Convert2CrvUSD contract
-- Add whitelisted tokens (WETH, USDC, CRV)
-- Save deployment info to `deployment.json`
+- Deploy single Convert2CrvUSD contract
+- Requires users to approve + deposit
+- Uses internal balance tracking
+
+**Note**: Factory pattern is recommended for production use.
 
 ### 2. Verify on Arbiscan
 

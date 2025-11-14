@@ -27,6 +27,12 @@ event Deposit:
     token: indexed(address)
     amount: uint256
 
+event DepositCredited:
+    user: indexed(address)
+    token: indexed(address)
+    amount: uint256
+    credited_by: indexed(address)
+
 event OrderCreated:
     order_uid: indexed(bytes32)
     sell_token: indexed(address)
@@ -90,6 +96,9 @@ token_whitelist_status: HashMap[address, bool]
 
 # User balances: user -> token -> amount
 user_token_balance: public(HashMap[address, HashMap[address, uint256]])
+
+# Track total credited amounts per token to verify contract has sufficient balance
+total_credited_balance: public(HashMap[address, uint256])
 
 # Order tracking
 struct OrderData:
@@ -165,10 +174,11 @@ def __default__():
 @external
 def deposit(token: address, amount: uint256):
     """
-    @notice Deposit tokens to be converted to crvUSD
+    @notice Deposit tokens to be converted to crvUSD (requires prior approval)
     @param token Token address to deposit
     @param amount Amount of tokens to deposit
     @dev Tokens must be whitelisted or user can request refund with fees
+         This function requires the user to have called token.approve() first
     """
     assert amount > 0, "Amount must be positive"
     assert token != empty(address), "Invalid token"
@@ -177,10 +187,41 @@ def deposit(token: address, amount: uint256):
     success: bool = extcall IERC20(token).transferFrom(msg.sender, self, amount)
     assert success, "Transfer failed"
 
-    # Update user balance
+    # Update user balance and total credited
     self.user_token_balance[msg.sender][token] += amount
+    self.total_credited_balance[token] += amount
 
     log Deposit(msg.sender, token, amount)
+
+@external
+def credit_deposit(user: address, token: address, amount: uint256):
+    """
+    @notice Credit a user's balance for tokens they sent directly to the contract
+    @param user User address to credit
+    @param token Token address
+    @param amount Amount to credit
+    @dev Only callable by operator
+         This enables Pattern B: user sends tokens directly via token.transfer(),
+         then operator detects the transfer off-chain and credits the user.
+         Pattern A (approve + deposit) is also still supported.
+    """
+    assert msg.sender == self.operator, "Only operator"
+    assert amount > 0, "Amount must be positive"
+    assert token != empty(address), "Invalid token"
+    assert user != empty(address), "Invalid user"
+
+    # Verify contract actually has enough balance to credit
+    # total_credited_balance tracks all amounts we've credited to users
+    # The contract's actual balance must be >= total_credited + amount
+    current_contract_balance: uint256 = staticcall IERC20(token).balanceOf(self)
+    new_total_credited: uint256 = self.total_credited_balance[token] + amount
+    assert current_contract_balance >= new_total_credited, "Insufficient contract balance"
+
+    # Update user balance and total credited
+    self.user_token_balance[user][token] += amount
+    self.total_credited_balance[token] = new_total_credited
+
+    log DepositCredited(user, token, amount, msg.sender)
 
 @external
 @view
