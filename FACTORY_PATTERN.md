@@ -81,6 +81,34 @@ Step 3: CoW solver executes trade
 
 ## Usage Examples
 
+### Find Your Deposit Address
+
+**This is the key function!** Users need to know where to send their tokens:
+
+```python
+import boa
+
+# Load factory
+factory = boa.load_partial("contracts/ConverterFactory.vy").at(FACTORY_ADDRESS)
+
+# Option 1: Simple address query
+user_address = "0x1234..."
+deposit_address = factory.get_deposit_address(user_address)
+print(f"Send tokens to: {deposit_address}")
+
+# Option 2: Check if converter exists first
+has_converter, converter_address = factory.get_converter_info(user_address)
+if has_converter:
+    print(f"Your converter: {converter_address}")
+else:
+    print("No converter yet - deploy one first!")
+
+# Option 3: Boolean check
+if factory.has_converter(user_address):
+    converter = factory.get_user_converter(user_address)
+    print(f"Your converter: {converter}")
+```
+
 ### Deploy a Personal Converter
 
 ```python
@@ -94,6 +122,10 @@ user_address = "0x1234..."
 converter_address = factory.deploy_personal_converter(user_address)
 
 print(f"User's personal converter: {converter_address}")
+
+# Note: This is idempotent - calling it again returns the same address
+same_address = factory.deploy_personal_converter(user_address)
+assert converter_address == same_address  # True!
 ```
 
 ### User Sends Tokens

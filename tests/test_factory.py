@@ -354,3 +354,74 @@ def test_non_owner_cannot_emergency_withdraw(alice_converter, alice, weth, bob):
     with boa.reverts("Only owner"):
         with boa.env.prank(bob):
             alice_converter.emergency_withdraw_token(weth.address, 5 * 10**18)
+
+
+def test_get_deposit_address(factory, alice):
+    """Test getting deposit address for a user"""
+    # Before deployment
+    deposit_addr = factory.get_deposit_address(alice)
+    assert deposit_addr == "0x0000000000000000000000000000000000000000"
+
+    # Deploy converter
+    converter_addr = factory.deploy_personal_converter(alice)
+
+    # After deployment
+    deposit_addr = factory.get_deposit_address(alice)
+    assert deposit_addr == converter_addr
+    assert deposit_addr != "0x0000000000000000000000000000000000000000"
+
+
+def test_get_converter_info(factory, alice, bob):
+    """Test getting comprehensive converter info"""
+    # Alice has no converter
+    has_converter, converter_addr = factory.get_converter_info(alice)
+    assert has_converter is False
+    assert converter_addr == "0x0000000000000000000000000000000000000000"
+
+    # Deploy converter for Alice
+    deployed_addr = factory.deploy_personal_converter(alice)
+
+    # Alice now has converter
+    has_converter, converter_addr = factory.get_converter_info(alice)
+    assert has_converter is True
+    assert converter_addr == deployed_addr
+
+    # Bob still has no converter
+    has_converter, converter_addr = factory.get_converter_info(bob)
+    assert has_converter is False
+
+
+def test_complete_user_flow_with_helper_functions(factory, alice, weth, operator, crv_usd):
+    """Test complete flow using the helper functions"""
+    # Step 1: Check if user has a converter
+    has_converter, converter_addr = factory.get_converter_info(alice)
+    assert has_converter is False
+
+    # Step 2: Deploy if needed
+    if not has_converter:
+        converter_addr = factory.deploy_personal_converter(alice)
+
+    # Step 3: Verify we can get the deposit address
+    deposit_address = factory.get_deposit_address(alice)
+    assert deposit_address == converter_addr
+
+    # Step 4: User sends tokens to the deposit address
+    weth.mint(alice, 10 * 10**18)
+    with boa.env.prank(alice):
+        weth.transfer(deposit_address, 5 * 10**18)
+
+    # Step 5: Load converter and verify balance
+    converter = boa.load_partial("contracts/PersonalConverter.vy").at(deposit_address)
+    assert converter.get_available_balance(weth.address) == 5 * 10**18
+
+    # Step 6: Operator creates order
+    with boa.env.prank(operator):
+        converter.create_order(
+            weth.address,
+            2 * 10**18,
+            3000 * 10**18,
+            boa.env.timestamp + 3600,
+            b"\x00" * 32
+        )
+
+    # Success! User only needed 1 transaction to send tokens

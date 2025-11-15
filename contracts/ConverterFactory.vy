@@ -159,6 +159,36 @@ def get_all_converters() -> DynArray[address, 1000]:
     """
     return self.all_converters
 
+@external
+@view
+def get_deposit_address(user: address) -> address:
+    """
+    @notice Get the address where a user should send tokens for conversion
+    @param user User address
+    @return The personal converter address where user should send tokens
+             Returns empty address if converter not yet deployed
+    @dev This is the key function for users to find where to send their tokens!
+         Workflow:
+         1. User calls get_deposit_address(their_address)
+         2. If empty, user calls deploy_personal_converter(their_address) first
+         3. User sends tokens directly to the returned address
+         4. Operator creates orders to convert to crvUSD
+    """
+    return self.user_converter[user]
+
+@external
+@view
+def get_converter_info(user: address) -> (bool, address):
+    """
+    @notice Get comprehensive converter info for a user
+    @param user User address
+    @return Tuple of (has_converter, converter_address)
+    @dev Convenience function that returns both existence check and address
+    """
+    converter: address = self.user_converter[user]
+    has_it: bool = converter != empty(address)
+    return (has_it, converter)
+
 # ========== WHITELIST MANAGEMENT ==========
 
 @external
